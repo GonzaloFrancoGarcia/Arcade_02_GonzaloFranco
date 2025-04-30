@@ -40,17 +40,17 @@ def check_solution(queens, N):
     return True
 
 def main():
-    # Tamaño del tablero
     N = int(sys.argv[1]) if len(sys.argv) > 1 else 8
 
-    # Configuración de Pygame
+    # Dimensiones
     SIZE = 600
+    INFO_HEIGHT = 100  # espacio extra bajo el tablero
     MARGIN = 50
     BOARD = SIZE - 2 * MARGIN
     CELL = BOARD // N
 
     pygame.init()
-    screen = pygame.display.set_mode((SIZE, SIZE + 100))
+    screen = pygame.display.set_mode((SIZE, SIZE + INFO_HEIGHT))
     pygame.display.set_caption(f"N-Reinas (N={N})")
     font = pygame.font.SysFont(None, 24)
     font_help = pygame.font.SysFont(None, 20)
@@ -64,8 +64,8 @@ def main():
     show_help = False
     help_text = ""
 
-    # Botón de Ayuda IA
-    button_rect = pygame.Rect(SIZE - 130, SIZE + 35, 120, 30)
+    # Botón Ayuda IA
+    button_rect = pygame.Rect(SIZE - 130, SIZE + INFO_HEIGHT - 65, 120, 30)
     button_color = (70, 130, 180)
 
     clock = pygame.time.Clock()
@@ -88,7 +88,6 @@ def main():
                     else:
                         queens.add((r, c))
                     pasos += 1
-
                     if check_solution(queens, N):
                         solved = True
                         solved_time = pygame.time.get_ticks()
@@ -106,13 +105,12 @@ def main():
                     def fetch_help():
                         nonlocal help_text
                         try:
-                            sugerencia = solicitar_sugerencia("nreinas", estado)
+                            help_text = solicitar_sugerencia("nreinas", estado)
                         except Exception as e:
-                            sugerencia = f"Error IA: {e}"
-                        help_text = sugerencia
+                            help_text = f"Error IA: {e}"
                     threading.Thread(target=fetch_help, daemon=True).start()
 
-        # Dibujar fondo y tablero
+        # Dibujo del tablero
         screen.fill((255, 255, 255))
         for r in range(N):
             for c in range(N):
@@ -123,7 +121,7 @@ def main():
                 color = (200, 200, 200) if (r + c) % 2 == 0 else (100, 100, 100)
                 pygame.draw.rect(screen, color, rect)
 
-        # Dibujar reinas
+        # Dibujo de reinas
         for (r, c) in queens:
             center = (
                 MARGIN + c * CELL + CELL // 2,
@@ -131,32 +129,29 @@ def main():
             )
             pygame.draw.circle(screen, (255, 0, 0), center, CELL // 3)
 
-        # Texto de pasos
+        # Pasos
         screen.blit(font.render(f"Pasos: {pasos}", True, (0, 0, 0)), (10, SIZE))
 
-        # Mensaje de resuelto
+        # Mensaje resuelto
         if solved:
-            screen.blit(font.render("¡Resuelto! Enviando resultado...", True, (0, 128, 0)), (MARGIN, SIZE + 5))
-            # Cierra tras 2 segundos
+            screen.blit(font.render("¡Resuelto! Enviando resultado...", True, (0, 128, 0)),
+                        (MARGIN, SIZE + 5))
             if pygame.time.get_ticks() - solved_time > 2000:
                 pygame.quit()
                 return
 
-        # Dibujar botón Ayuda IA
+        # Botón IA
         pygame.draw.rect(screen, button_color, button_rect)
         screen.blit(font_help.render("Ayuda IA", True, (255, 255, 255)),
                     (button_rect.x + 15, button_rect.y + 5))
 
-        # Mostrar respuesta IA
+        # Caja de respuesta IA
         if show_help:
-            # Fondo semitransparente
             help_bg = pygame.Surface((SIZE - 20, 80))
             help_bg.set_alpha(200)
             help_bg.fill((240, 240, 240))
             screen.blit(help_bg, (10, SIZE + 40))
-            # Render de hasta 4 líneas
-            lines = help_text.split("\n")
-            for i, line in enumerate(lines[:4]):
+            for i, line in enumerate(help_text.split("\n")[:4]):
                 txt = font_help.render(line, True, (0, 0, 0))
                 screen.blit(txt, (20, SIZE + 50 + i * 20))
 

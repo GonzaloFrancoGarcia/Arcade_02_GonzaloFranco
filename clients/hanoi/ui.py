@@ -2,11 +2,11 @@
 import sys
 import threading
 import json
-from datetime import datetime
 import traceback
+from datetime import datetime
 import os
 
-# Ajuste de path
+# Ajuste de path para importar desde la raíz
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(THIS_DIR, os.pardir, os.pardir))
 if PROJECT_ROOT not in sys.path:
@@ -30,20 +30,19 @@ def send_result(discos, movimientos, resuelto):
         print("⚠️ Error al enviar resultado:", e)
 
 def main():
-    n = int(sys.argv[1]) if len(sys.argv)>1 else 3
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 3
 
     SIZE = 600
+    INFO_HEIGHT = 100
     MARGIN = 50
-    BASE_Y = SIZE - MARGIN//2
-    CELL = (SIZE - 2*MARGIN)//4  # anchura disco base
+    BASE_Y = SIZE - MARGIN // 2
 
     pygame.init()
-    screen = pygame.display.set_mode((SIZE, SIZE + 100))
+    screen = pygame.display.set_mode((SIZE, SIZE + INFO_HEIGHT))
     pygame.display.set_caption("Torres de Hanói")
     font = pygame.font.SysFont(None, 24)
     font_help = pygame.font.SysFont(None, 20)
 
-    # estado del juego
     pegs = {0: list(range(n,0,-1)), 1: [], 2: []}
     movimientos = 0
     selected = None
@@ -53,21 +52,20 @@ def main():
     # IA
     show_help = False
     help_text = ""
-    button_rect = pygame.Rect(SIZE-130, SIZE+35, 120, 30)
-    button_color = (70,130,180)
+    button_rect = pygame.Rect(SIZE - 130, SIZE + INFO_HEIGHT - 65, 120, 30)
+    button_color = (70, 130, 180)
 
     clock = pygame.time.Clock()
 
     def draw_pegs():
         screen.fill((255,255,255))
-        # varillas y discos
         for i in range(3):
-            x = MARGIN + i*( (SIZE-2*MARGIN)//2 )
+            x = MARGIN + i * ((SIZE - 2*MARGIN)//2)
             pygame.draw.line(screen, (0,0,0), (x, MARGIN), (x, BASE_Y), 5)
             for depth, size in enumerate(pegs[i]):
-                w,h = size*20,20
-                rect = pygame.Rect(x-w//2, BASE_Y-(depth+1)*h, w, h)
-                pygame.draw.rect(screen, (150, 150+size*5, 200-size*5), rect)
+                w, h = size*20, 20
+                rect = pygame.Rect(x - w//2, BASE_Y - (depth+1)*h, w, h)
+                pygame.draw.rect(screen, (150,150+size*5,200-size*5), rect)
         screen.blit(font.render(f"Mov.: {movimientos}", True, (0,0,0)), (10,10))
 
     while True:
@@ -77,22 +75,22 @@ def main():
                 return
 
             if evt.type == pygame.MOUSEBUTTONDOWN:
-                mx,my = evt.pos
+                mx, my = evt.pos
+
                 # mover disco
                 if not solved:
                     for i in range(3):
-                        x = MARGIN + i*( (SIZE-2*MARGIN)//2 )
-                        if abs(mx-x)<30:
+                        x = MARGIN + i * ((SIZE - 2*MARGIN)//2)
+                        if abs(mx-x) < 30:
                             if selected is None and pegs[i]:
                                 selected = i
                             elif selected is not None:
-                                if not pegs[i] or pegs[selected][-1]<pegs[i][-1]:
+                                if not pegs[i] or pegs[selected][-1] < pegs[i][-1]:
                                     pegs[i].append(pegs[selected].pop())
                                     movimientos += 1
                                 selected = None
                             break
-                    # comprobar fin
-                    if len(pegs[2])==n:
+                    if len(pegs[2]) == n:
                         solved = True
                         solved_time = pygame.time.get_ticks()
                         threading.Thread(
@@ -103,7 +101,6 @@ def main():
 
                 # botón IA
                 if button_rect.collidepoint(mx,my):
-                    # serializar estado
                     estado = {"n": n, "pegs": pegs}
                     show_help = True
                     help_text = "Pensando..."
@@ -115,29 +112,29 @@ def main():
                             help_text = f"Error IA: {e}"
                     threading.Thread(target=fetch_help, daemon=True).start()
 
-        # dibujar estado
         draw_pegs()
 
         # mensaje resuelto
         if solved:
             screen.blit(font.render("¡Resuelto! Enviando...", True, (0,128,0)), (MARGIN, BASE_Y+10))
-            if pygame.time.get_ticks()-solved_time>2000:
+            if pygame.time.get_ticks() - solved_time > 2000:
                 pygame.quit()
                 return
 
         # botón IA
         pygame.draw.rect(screen, button_color, button_rect)
         screen.blit(font_help.render("Ayuda IA", True, (255,255,255)),
-                    (button_rect.x+15, button_rect.y+5))
+                    (button_rect.x + 15, button_rect.y + 5))
 
-        # mostrar ayuda IA
+        # respuesta IA
         if show_help:
-            bg = pygame.Surface((SIZE-20, 80))
-            bg.set_alpha(200)
-            bg.fill((240,240,240))
-            screen.blit(bg, (10, SIZE+40))
+            help_bg = pygame.Surface((SIZE - 20, 80))
+            help_bg.set_alpha(200)
+            help_bg.fill((240,240,240))
+            screen.blit(help_bg, (10, SIZE+40))
             for i, line in enumerate(help_text.split("\n")[:4]):
-                screen.blit(font_help.render(line, True, (0,0,0)), (20, SIZE+50+i*20))
+                txt = font_help.render(line, True, (0,0,0))
+                screen.blit(txt, (20, SIZE+50 + i*20))
 
         pygame.display.flip()
         clock.tick(30)

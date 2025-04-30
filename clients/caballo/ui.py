@@ -32,12 +32,13 @@ def send_result(inicio, movimientos, completado):
 def main():
     N = 8
     SIZE = 600
+    INFO_HEIGHT = 100
     MARGIN = 50
     BOARD = SIZE - 2 * MARGIN
     CELL = BOARD // N
 
     pygame.init()
-    screen = pygame.display.set_mode((SIZE, SIZE + 100))
+    screen = pygame.display.set_mode((SIZE, SIZE + INFO_HEIGHT))
     pygame.display.set_caption("Knight’s Tour")
     font = pygame.font.SysFont(None, 24)
     font_help = pygame.font.SysFont(None, 20)
@@ -52,9 +53,7 @@ def main():
     # IA
     show_help = False
     help_text = ""
-
-    # Botón ayuda IA
-    button_rect = pygame.Rect(SIZE - 130, SIZE + 35, 120, 30)
+    button_rect = pygame.Rect(SIZE - 130, SIZE + INFO_HEIGHT - 65, 120, 30)
     button_color = (70, 130, 180)
 
     offsets = [(2,1),(1,2),(-1,2),(-2,1),(-2,-1),(-1,-2),(1,-2),(2,-1)]
@@ -69,7 +68,7 @@ def main():
             if evt.type == pygame.MOUSEBUTTONDOWN:
                 x,y = evt.pos
 
-                # tablero
+                # Clic en tablero
                 if not solved and MARGIN <= x < MARGIN+CELL*N and MARGIN <= y < MARGIN+CELL*N:
                     c = (x - MARGIN)//CELL
                     r = (y - MARGIN)//CELL
@@ -93,9 +92,8 @@ def main():
                                     daemon=True
                                 ).start()
 
-                # botón IA
+                # Clic en botón IA
                 if button_rect.collidepoint(x,y):
-                    # serializar estado
                     estado = {
                         "N": N,
                         "inicio": f"{chr(start_pos[1]+65)}{start_pos[0]+1}" if start_pos else None,
@@ -111,40 +109,42 @@ def main():
                             help_text = f"Error IA: {e}"
                     threading.Thread(target=fetch_help, daemon=True).start()
 
-        # dibujo tablero
+        # Dibujo tablero
         screen.fill((255,255,255))
         for r in range(N):
             for c in range(N):
                 rect = pygame.Rect(MARGIN + c*CELL, MARGIN + r*CELL, CELL, CELL)
                 color = (240,240,240) if (r+c)%2==0 else (160,160,160)
                 pygame.draw.rect(screen, color, rect)
-        # visitadas
+
+        # Casillas visitadas
         for (r,c) in visited:
             rect = pygame.Rect(MARGIN + c*CELL, MARGIN + r*CELL, CELL, CELL)
             pygame.draw.rect(screen, (100,200,100), rect)
-        # caballo
+
+        # Caballo
         if knight_pos:
             center = (MARGIN+knight_pos[1]*CELL+CELL//2, MARGIN+knight_pos[0]*CELL+CELL//2)
             pygame.draw.circle(screen, (0,0,255), center, CELL//3)
 
-        # texto estado
+        # Movimientos
         screen.blit(font.render(f"Movimientos: {movimientos}", True, (0,0,0)), (10, SIZE))
 
-        # mensaje resuelto
+        # Resuelto
         if solved:
             screen.blit(font.render("¡Completado! Enviando...", True, (0,128,0)), (MARGIN, SIZE+5))
             if pygame.time.get_ticks() - solved_time > 2000:
                 pygame.quit()
                 return
 
-        # botón IA
+        # Botón IA
         pygame.draw.rect(screen, button_color, button_rect)
         screen.blit(font_help.render("Ayuda IA", True, (255,255,255)),
-                    (button_rect.x+15, button_rect.y+5))
+                    (button_rect.x + 15, button_rect.y + 5))
 
-        # mostrar ayuda IA
+        # Respuesta IA
         if show_help:
-            help_bg = pygame.Surface((SIZE-20, 80))
+            help_bg = pygame.Surface((SIZE - 20, 80))
             help_bg.set_alpha(200)
             help_bg.fill((240,240,240))
             screen.blit(help_bg, (10, SIZE+40))
