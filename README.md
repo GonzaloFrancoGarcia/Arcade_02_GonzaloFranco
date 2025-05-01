@@ -75,3 +75,9 @@ python main.py
 ```plaintext
 python launcher.py
 ```
+
+- **Variable de entorno**  
+  Debes exportar tu Hugging Face API Key antes de arrancar cualquier cliente o el launcher:
+  ```bash
+  export HF_API_KEY="tu_token_aquí"      # Linux / macOS
+  $Env:HF_API_KEY="tu_token_aquí"        # PowerShell

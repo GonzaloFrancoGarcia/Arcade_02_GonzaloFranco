@@ -1,36 +1,40 @@
-import os
 import requests
-import json
 
-# URL y llave de tu cuenta de Hugging Face
 API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
-API_KEY = os.getenv("HF_API_KEY")  # Pon aquí tu token o usa variable de entorno
+API_KEY = "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"
 HEADERS = {"Authorization": f"Bearer {API_KEY}"}
 
+GEN_PARAMS = {
+    "max_new_tokens": 100,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 50,
+    "repetition_penalty": 1.2,
+    "no_repeat_ngram_size": 3,
+    "return_full_text": False
+}
+
 def solicitar_sugerencia(juego: str, estado: dict) -> str:
-    """
-    Envía el estado actual del juego y devuelve la sugerencia de estrategia.
-    - juego: 'nreinas' | 'caballo' | 'hanoi'
-    - estado: dict serializable con la información relevante
-    """
-    payload = {
-        "inputs": {
-            "juego": juego,
-            "estado": estado
-        }
-    }
-    resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=10)
+    prompt = f"Juego: {juego}. Estado: {estado}. ¿Qué sugerencia me das para el siguiente movimiento?"
+    payload = {"inputs": prompt, "parameters": GEN_PARAMS}
+    resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=15)
     resp.raise_for_status()
     data = resp.json()
-    # Ajusta según formato real de la API
-    return data.get("generated_text", str(data))
+    print(">> DEBUG IA respuesta cruda:", data)  # <— Depuración
+    if isinstance(data, list) and data and "generated_text" in data[0]:
+        return data[0]["generated_text"].strip() or "<sin texto>"
+    if isinstance(data, dict) and "generated_text" in data:
+        return data["generated_text"].strip() or "<sin texto>"
+    return "<sin generated_text>"
 
 def consultar_chatbot(pregunta: str) -> str:
-    """
-    Envía una pregunta libre al modelo y devuelve la respuesta.
-    """
-    payload = {"inputs": pregunta}
-    resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=10)
+    payload = {"inputs": pregunta, "parameters": GEN_PARAMS}
+    resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=15)
     resp.raise_for_status()
     data = resp.json()
-    return data.get("generated_text", str(data))
+    print(">> DEBUG Chatbot respuesta cruda:", data)  # <— Depuración
+    if isinstance(data, list) and data and "generated_text" in data[0]:
+        return data[0]["generated_text"].strip() or "<sin texto>"
+    if isinstance(data, dict) and "generated_text" in data:
+        return data["generated_text"].strip() or "<sin texto>"
+    return "<sin generated_text>"

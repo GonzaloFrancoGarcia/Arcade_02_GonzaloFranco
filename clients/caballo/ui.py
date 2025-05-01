@@ -1,164 +1,97 @@
 #!/usr/bin/env python3
-import sys
-import threading
-import json
-import traceback
+import sys, threading, json, traceback, os
 from datetime import datetime
-import os
 
-# Ajuste de path para importar desde la raíz
+# Path setup
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(THIS_DIR, os.pardir, os.pardir))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+if PROJECT_ROOT not in sys.path: sys.path.insert(0,PROJECT_ROOT)
 
 import pygame
 from clients.common.network import Client
 from clients.common.ia_client import solicitar_sugerencia
 
-def send_result(inicio, movimientos, completado):
-    payload = {
-        'juego': 'caballo',
-        'inicio': inicio,
-        'movimientos': movimientos,
-        'completado': completado,
-        'timestamp': datetime.utcnow().isoformat()
-    }
-    try:
-        Client().send(json.dumps(payload))
-    except Exception as e:
-        print("⚠️ Error al enviar resultado:", e)
+RULES_CABALLO = (
+    "- Mueve el caballo en L: 2 casillas en una dirección y 1 en perpendicular.\n"
+    "- Debes visitar cada casilla exactamente una vez sin repetir."
+)
+
+def send_result(inicio,movs,comp):
+    payload={'juego':'caballo','inicio':inicio,'movimientos':movs,'completado':comp,'timestamp':datetime.utcnow().isoformat()}
+    try: Client().send(json.dumps(payload))
+    except Exception as e: print("⚠️ Error al enviar:",e)
 
 def main():
-    N = 8
-    SIZE = 600
-    INFO_HEIGHT = 100
-    MARGIN = 50
-    BOARD = SIZE - 2 * MARGIN
-    CELL = BOARD // N
-
+    N=8; SIZE=500; INFO=80; M=40; CELL=(SIZE-2*M)//N
     pygame.init()
-    screen = pygame.display.set_mode((SIZE, SIZE + INFO_HEIGHT))
+    screen=pygame.display.set_mode((SIZE,SIZE+INFO))
     pygame.display.set_caption("Knight’s Tour")
-    font = pygame.font.SysFont(None, 24)
-    font_help = pygame.font.SysFont(None, 20)
+    font=pygame.font.SysFont(None,20); font_h=pygame.font.SysFont(None,18)
 
-    knight_pos = None
-    start_pos = None
-    visited = set()
-    movimientos = 0
-    solved = False
-    solved_time = None
+    knight=None; start=None; visited=set()
+    movs=0; solved=False; st=0
+    show=False; help_t=""
 
-    # IA
-    show_help = False
-    help_text = ""
-    button_rect = pygame.Rect(SIZE - 130, SIZE + INFO_HEIGHT - 65, 120, 30)
-    button_color = (70, 130, 180)
-
-    offsets = [(2,1),(1,2),(-1,2),(-2,1),(-2,-1),(-1,-2),(1,-2),(2,-1)]
-    clock = pygame.time.Clock()
+    btn=pygame.Rect(SIZE-120,SIZE+INFO-50,100,25); bcol=(70,130,180)
+    offs=[(2,1),(1,2),(-1,2),(-2,1),(-2,-1),(-1,-2),(1,-2),(2,-1)]
+    clock=pygame.time.Clock()
 
     while True:
-        for evt in pygame.event.get():
-            if evt.type == pygame.QUIT:
-                pygame.quit()
-                return
-
-            if evt.type == pygame.MOUSEBUTTONDOWN:
-                x,y = evt.pos
-
-                # Clic en tablero
-                if not solved and MARGIN <= x < MARGIN+CELL*N and MARGIN <= y < MARGIN+CELL*N:
-                    c = (x - MARGIN)//CELL
-                    r = (y - MARGIN)//CELL
-                    if knight_pos is None:
-                        knight_pos = (r,c)
-                        start_pos = (r,c)
-                        visited.add((r,c))
+        for e in pygame.event.get():
+            if e.type==pygame.QUIT:
+                pygame.quit();return
+            if e.type==pygame.MOUSEBUTTONDOWN:
+                x,y=e.pos
+                if not solved and M<=x<M+CELL*N and M<=y<M+CELL*N:
+                    c=(x-M)//CELL; r=(y-M)//CELL
+                    if knight is None:
+                        knight=(r,c); start=(r,c); visited.add((r,c))
                     else:
-                        dr,dc = r-knight_pos[0], c-knight_pos[1]
-                        if (dr,dc) in offsets and (r,c) not in visited:
-                            knight_pos = (r,c)
-                            visited.add((r,c))
-                            movimientos += 1
-                            if len(visited) == N*N:
-                                solved = True
-                                solved_time = pygame.time.get_ticks()
-                                inicio_str = f"{chr(start_pos[1]+65)}{start_pos[0]+1}"
-                                threading.Thread(
-                                    target=send_result,
-                                    args=(inicio_str, movimientos, True),
-                                    daemon=True
-                                ).start()
+                        dr,dc=r-knight[0],c-knight[1]
+                        if (dr,dc) in offs and (r,c) not in visited:
+                            knight=(r,c); visited.add((r,c)); movs+=1
+                            if len(visited)==N*N:
+                                solved=True; st=pygame.time.get_ticks()
+                                ini=f"{chr(start[1]+65)}{start[0]+1}"
+                                threading.Thread(target=send_result,args=(ini,movs,True),daemon=True).start()
+                if btn.collidepoint(x,y):
+                    show=True; help_t=RULES_CABALLO
+                    estado={"inicio":f"{chr(start[1]+65)}{start[0]+1}" if start else None,"visitadas":list(visited)}
+                    def f(): 
+                        nonlocal help_t
+                        try: help_t=solicitar_sugerencia("caballo",estado)
+                        except Exception as ex: help_t=f"Error IA: {ex}"
+                    threading.Thread(target=f,daemon=True).start()
 
-                # Clic en botón IA
-                if button_rect.collidepoint(x,y):
-                    estado = {
-                        "N": N,
-                        "inicio": f"{chr(start_pos[1]+65)}{start_pos[0]+1}" if start_pos else None,
-                        "visitadas": [[r,c] for (r,c) in visited]
-                    }
-                    show_help = True
-                    help_text = "Pensando..."
-                    def fetch_help():
-                        nonlocal help_text
-                        try:
-                            help_text = solicitar_sugerencia("caballo", estado)
-                        except Exception as e:
-                            help_text = f"Error IA: {e}"
-                    threading.Thread(target=fetch_help, daemon=True).start()
-
-        # Dibujo tablero
         screen.fill((255,255,255))
+        # tablero
         for r in range(N):
             for c in range(N):
-                rect = pygame.Rect(MARGIN + c*CELL, MARGIN + r*CELL, CELL, CELL)
-                color = (240,240,240) if (r+c)%2==0 else (160,160,160)
-                pygame.draw.rect(screen, color, rect)
-
-        # Casillas visitadas
+                col=(240,240,240) if (r+c)%2==0 else (160,160,160)
+                pygame.draw.rect(screen,col,(M+c*CELL,M+r*CELL,CELL,CELL))
+        # visitadas
         for (r,c) in visited:
-            rect = pygame.Rect(MARGIN + c*CELL, MARGIN + r*CELL, CELL, CELL)
-            pygame.draw.rect(screen, (100,200,100), rect)
-
-        # Caballo
-        if knight_pos:
-            center = (MARGIN+knight_pos[1]*CELL+CELL//2, MARGIN+knight_pos[0]*CELL+CELL//2)
-            pygame.draw.circle(screen, (0,0,255), center, CELL//3)
-
-        # Movimientos
-        screen.blit(font.render(f"Movimientos: {movimientos}", True, (0,0,0)), (10, SIZE))
-
-        # Resuelto
+            pygame.draw.rect(screen,(100,200,100),(M+c*CELL,M+r*CELL,CELL,CELL))
+        # caballo
+        if knight:
+            ctr=(M+knight[1]*CELL+CELL//2,M+knight[0]*CELL+CELL//2)
+            pygame.draw.circle(screen,(0,0,255),ctr,CELL//3)
+        # texto/ resuelto
+        screen.blit(font.render(f"Movs: {movs}",True,(0,0,0)),(10,SIZE))
         if solved:
-            screen.blit(font.render("¡Completado! Enviando...", True, (0,128,0)), (MARGIN, SIZE+5))
-            if pygame.time.get_ticks() - solved_time > 2000:
-                pygame.quit()
-                return
+            screen.blit(font.render("¡Completado!",True,(0,128,0)),(M,SIZE+5))
+            if pygame.time.get_ticks()-st>1500: pygame.quit();return
+        # botón IA
+        pygame.draw.rect(screen,bcol,btn)
+        screen.blit(font_h.render("Ayuda IA",True,(255,255,255)),(btn.x+10,btn.y+5))
+        # caja
+        if show:
+            bg=pygame.Surface((SIZE-20,60));bg.set_alpha(200);bg.fill((240,240,240))
+            screen.blit(bg,(10,SIZE+15))
+            for i,line in enumerate(help_t.split("\n")[:3]):
+                screen.blit(font_h.render(line,True,(0,0,0)),(15,SIZE+20+i*18))
 
-        # Botón IA
-        pygame.draw.rect(screen, button_color, button_rect)
-        screen.blit(font_help.render("Ayuda IA", True, (255,255,255)),
-                    (button_rect.x + 15, button_rect.y + 5))
+        pygame.display.flip(); clock.tick(30)
 
-        # Respuesta IA
-        if show_help:
-            help_bg = pygame.Surface((SIZE - 20, 80))
-            help_bg.set_alpha(200)
-            help_bg.fill((240,240,240))
-            screen.blit(help_bg, (10, SIZE+40))
-            for i, line in enumerate(help_text.split("\n")[:4]):
-                txt = font_help.render(line, True, (0,0,0))
-                screen.blit(txt, (20, SIZE+50 + i*20))
-
-        pygame.display.flip()
-        clock.tick(30)
-
-if __name__ == '__main__':
-    try:
-        main()
-    except Exception:
-        traceback.print_exc()
-    finally:
-        pygame.quit()
+if __name__=='__main__':
+    main()
