@@ -3,3 +3,6 @@ SQLAlchemy>=1.4
 transformers>=4.30.0
 torch>=2.0.0
 tk>=0.1.0
+huggingface-hub>=0.16.4
+requests>=2.25.1
+
