@@ -8,7 +8,7 @@ def launch_game(module, arg=None):
     if arg:
         cmd.append(str(arg))
     subprocess.Popen(cmd)
-    
+
 
 def view_results():
     db_path = "server/resultados.db"

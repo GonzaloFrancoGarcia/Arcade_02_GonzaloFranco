@@ -1,21 +1,16 @@
+# clients/common/ia_client.py
+
 import os
-import requests
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-# URL de la Inference API para DialoGPT-medium
-API_URL = "https://huggingface.co/microsoft/DialoGPT-medium/tree/main"
+# Modelo local
+MODEL_NAME = "microsoft/DialoGPT-medium"
 
-
-# Leemos el token desde la variable de entorno
-API_KEY = os.getenv("HF_API_KEY")
-if not API_KEY:
-    raise RuntimeError(
-        "❌ No se encontró la variable HF_API_KEY.\n"
-        "Define tu token con:\n"
-        "  export HF_API_KEY=\"<tu_token>\"   (Linux/macOS)\n"
-        "  $Env:HF_API_KEY=\"<tu_token>\"     (PowerShell)\n"
-    )
-
-HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+# Cargamos modelo y tokenizador una sola vez
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model     = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
+model.eval()
 
 # Parámetros de generación
 GEN_PARAMS = {
@@ -24,12 +19,11 @@ GEN_PARAMS = {
     "top_p": 0.9,
     "top_k": 50,
     "repetition_penalty": 1.2,
-    "no_repeat_ngram_size": 3,
-    "return_full_text": False
+    "no_repeat_ngram_size": 3
 }
 
 def solicitar_sugerencia(juego: str, estado: dict) -> str:
-    # Construye un prompt en lenguaje natural según el juego
+    # Formatea prompt en texto natural
     if juego == "nreinas":
         prompt = (
             f"Estoy jugando al problema de {estado['N']} reinas. "
@@ -38,43 +32,49 @@ def solicitar_sugerencia(juego: str, estado: dict) -> str:
         )
     elif juego == "caballo":
         prompt = (
-            f"Estoy en Knight’s Tour en un tablero de {estado['N']}×{estado['N']}. "
+            f"Knight’s Tour en un tablero {estado['N']}×{estado['N']}. "
             f"Empecé en {estado.get('inicio')} y he visitado {estado['visitadas']}. "
             "¿Cuál es mi próximo movimiento?"
         )
     elif juego == "hanoi":
         prompt = (
-            f"Solucionando Torres de Hanói con {estado['discos']} discos. "
-            f"Configuración actual: {estado['pegs']}. "
-            "¿Qué movimiento debería hacer ahora?"
+            f"Torres de Hanói con {estado['discos']} discos. "
+            f"Configuración: {estado['pegs']}. "
+            "¿Qué movimiento hago ahora?"
         )
     else:
-        prompt = f"Estado del juego: {estado}. ¿Qué sugerencia tienes?"
+        prompt = f"Estado: {estado}. ¿Sugerencia?"
 
-    payload = {"inputs": prompt, "parameters": GEN_PARAMS}
-    resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
-
-    # Extrae el campo generated_text, atiende lista o dict
-    if isinstance(data, list) and data and "generated_text" in data[0]:
-        text = data[0]["generated_text"]
-    elif isinstance(data, dict) and "generated_text" in data:
-        text = data["generated_text"]
-    else:
-        text = ""
-
-    return text.strip() or "<sin sugerencia disponible>"
+    # Tokeniza y genera
+    inputs = tokenizer.encode(prompt + tokenizer.eos_token, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model.generate(
+            inputs,
+            max_length=inputs.shape[-1] + GEN_PARAMS["max_new_tokens"],
+            pad_token_id=tokenizer.eos_token_id,
+            temperature=GEN_PARAMS["temperature"],
+            top_p=GEN_PARAMS["top_p"],
+            top_k=GEN_PARAMS["top_k"],
+            repetition_penalty=GEN_PARAMS["repetition_penalty"],
+            no_repeat_ngram_size=GEN_PARAMS["no_repeat_ngram_size"],
+        )
+    # Extrae solo la parte nueva
+    generated = outputs[0][inputs.shape[-1]:]
+    return tokenizer.decode(generated, skip_special_tokens=True).strip() or "<sin sugerencia>"
 
 def consultar_chatbot(pregunta: str) -> str:
-    payload = {"inputs": pregunta, "parameters": GEN_PARAMS}
-    resp = requests.post(API_URL, headers=HEADERS, json=payload, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
-    if isinstance(data, list) and data and "generated_text" in data[0]:
-        text = data[0]["generated_text"]
-    elif isinstance(data, dict) and "generated_text" in data:
-        text = data["generated_text"]
-    else:
-        text = ""
-    return text.strip() or "<sin respuesta disponible>"
+    prompt = pregunta + tokenizer.eos_token
+    inputs = tokenizer.encode(prompt, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model.generate(
+            inputs,
+            max_length=inputs.shape[-1] + GEN_PARAMS["max_new_tokens"],
+            pad_token_id=tokenizer.eos_token_id,
+            temperature=GEN_PARAMS["temperature"],
+            top_p=GEN_PARAMS["top_p"],
+            top_k=GEN_PARAMS["top_k"],
+            repetition_penalty=GEN_PARAMS["repetition_penalty"],
+            no_repeat_ngram_size=GEN_PARAMS["no_repeat_ngram_size"],
+        )
+    generated = outputs[0][inputs.shape[-1]:]
+    return tokenizer.decode(generated, skip_special_tokens=True).strip() or "<sin respuesta>"
